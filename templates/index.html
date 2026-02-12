@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fund Alpha · 基金实时估值分析</title>
+    <title>Fund Maogugu · 基金实时估值分析</title>
     <link rel="icon" href="data:,">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -360,15 +360,15 @@
         .metric-value.up {
             color: #ef4444;
             text-shadow: 
-                0 0 20px rgba(16, 185, 129, 0.3),
-                0 0 40px rgba(16, 185, 129, 0.2);
+                0 0 20px rgba(239, 68, 68, 0.3),
+                0 0 40px rgba(239, 68, 68, 0.2);
         }
 
         .metric-value.down {
             color: #10b981;
             text-shadow: 
-                0 0 20px rgba(239, 68, 68, 0.3),
-                0 0 40px rgba(239, 68, 68, 0.2);
+                0 0 20px rgba(16, 185, 129, 0.3),
+                0 0 40px rgba(16, 185, 129, 0.2);
         }
 
         /* 持仓明细表格 */
@@ -529,6 +529,8 @@
             }
         }
     </style>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -598,6 +600,14 @@
                         <div class="metric-value" id="deviation"></div>
                     </div>
                 </div>
+                <div class="chart-container" style="background: rgba(255, 255, 255, 0.02); border-radius: 20px; padding: 24px; margin-top: 24px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <span style="color: rgba(255,255,255,0.7); font-size: 0.9rem; font-weight: 600;">📈 历史走势回顾</span>
+                        <span style="color: rgba(255,255,255,0.4); font-size: 0.8rem;">数据说明：最近30个交易日单位净值</span>
+                    </div>
+        <div id="fundChart" style="width: 100%; height: 300px;"></div>
+</div>
+                </div>
             </div>
 
             <!-- 持仓明细 -->
@@ -623,6 +633,8 @@
     </div>
 
     <script>
+        let myChart = null; // 用于存储 ECharts 实例
+
         // 快速搜索
         function quickSearch(code) {
             document.getElementById('fundCode').value = code;
@@ -680,10 +692,20 @@
             setMetric('officialGrowth', official);
             setMetric('theoryGrowth', theory);
             setMetric('deviation', deviation);
-            
+           
+            // 【新增】如果返回了历史数据，则绘制图表
+            if (data.history && data.history.length > 0) {
+                initChart(data.history);}
+
             // 持仓表格
             const tbody = document.getElementById('holdingsTable');
             tbody.innerHTML = '';
+
+            if (!data.holdings || data.holdings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:rgba(255,255,255,0.3);padding:40px;">暂无重仓股披露数据</td></tr>';
+                return;
+            }
+
             data.holdings.forEach((h, idx) => {
                 tbody.innerHTML += `
                     <tr>
@@ -696,14 +718,26 @@
             });
             
             document.getElementById('result').classList.remove('d-none');
+            if (myChart) {
+                setTimeout(() => {
+                    myChart.resize();
+                }, 300);
+            }
         }
 
         // 设置指标值和颜色
         function setMetric(id, value) {
             const el = document.getElementById(id);
             const sign = value >= 0 ? '+' : '';
+        // 如果是偏差值，且绝对值大于 1%，使用金黄色提醒
+            if (id === 'deviation' && Math.abs(value) > 1.0) {
+                el.style.color = '#fbbf24'; // Warning Yellow
+                el.textContent = sign + value + '%';
+                el.classList.remove('up', 'down');
+                return;
+            }
+
             const className = value >= 0 ? 'up' : 'down';
-            
             el.textContent = sign + value + '%';
             el.className = `metric-value ${className}`;
         }
@@ -722,9 +756,70 @@
 
         // 控制台欢迎信息
         console.log(
-            '%c🚀 FUND ALPHA SYSTEM READY', 
+            '%c🚀 FUND MAOGUGU SYSTEM READY', 
             'background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px;'
         );
+
+        // --- 新增：初始化并绘制图表 ---
+        function initChart(historyData) {
+            const chartDom = document.getElementById('fundChart');
+            if (!myChart) {
+                myChart = echarts.init(chartDom, 'dark'); // 使用暗色主题
+                }
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(20, 20, 40, 0.9)',
+                    borderColor: '#8b5cf6',
+                    textStyle: { color: '#fff' }
+                },
+                grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                xAxis: {
+                    type: 'category',
+                    data: historyData.map(item => item.date),
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+                    axisLabel: { color: 'rgba(255,255,255,0.4)' }
+                },
+                yAxis: {
+                    type: 'value',
+                    scale: true,
+                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+                    axisLabel: { color: 'rgba(255,255,255,0.4)' }
+                },
+        series: [{
+            name: '单位净值',
+            data: historyData.map(item => item.value),
+            type: 'line',
+            smooth: true,
+            symbol: 'none',
+            lineStyle: { width: 3, color: '#8b5cf6' },
+            areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(139, 92, 246, 0.4)' },
+                    { offset: 1, color: 'rgba(139, 92, 246, 0)' }
+                ])
+            }
+        }]
+    };
+    myChart.setOption(option, true);
+}
+
+// 监听窗口大小变化，让图表自适应
+window.addEventListener('resize', () => {
+    if (myChart) myChart.resize();
+});
+
+
+
     </script>
+
+
+<footer style="text-align: center; padding: 40px 0; color: rgba(255,255,255,0.2); font-size: 0.8rem;">
+    <p>© 2026 Fund Maogugu · 实时数据源自公开市场信息</p>
+    <p style="margin-top: 8px;">投资有风险，入市需谨慎</p>
+</footer>
+
 </body>
 </html>
