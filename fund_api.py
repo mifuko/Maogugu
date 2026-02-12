@@ -95,7 +95,12 @@ def compare_valuation(fund_code):
     holdings = get_top_10_holdings(fund_code)
     history_data = get_fund_history(fund_code)
     
-    # 获取重仓股实时涨幅
+    # --- 新增逻辑开始 ---
+    # history_data 是正序排列的（最新的在最后），所以最后一个元素就是“昨日/上个交易日”的实际净值
+    last_actual_value = history_data[-1]['value'] if history_data else 0
+    # --- 新增逻辑结束 ---
+
+    # 获取重仓股实时涨幅 (原有代码保持不变)
     stock_queries = [f"{'sh' if h['code'].startswith('6') else 'sz'}{h['code']}" for h in holdings]
     stock_url = f"https://qt.gtimg.cn/q=s_{',s_'.join(stock_queries)}"
     
@@ -120,6 +125,7 @@ def compare_valuation(fund_code):
         'official_growth': round(official_growth, 3),
         'theory_growth': round(theory_growth, 3),
         'deviation': round(official_growth - theory_growth, 3),
-        'history': history_data, # 传给前端完整数组
+        'last_actual_value': last_actual_value, # <--- 关键：把这个值传给前端
+        'history': history_data,
         'holdings': holdings
     }

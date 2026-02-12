@@ -7,6 +7,28 @@
     <link rel="icon" href="data:,">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+                /* 强化大卡片的视觉权重 */
+        .hero-box {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%) !important;
+            padding: 40px !important;
+        }
+
+        .hero-box.highlight {
+            border: 1px solid rgba(251, 191, 36, 0.3) !important;
+            background: radial-gradient(circle at top right, rgba(251, 191, 36, 0.05), transparent) !important;
+        }
+
+        .small-box {
+            padding: 24px !important;
+        }
+
+        /* 移动端自适应：小屏时变回单列 */
+        @media (max-width: 768px) {
+            .metrics-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -585,21 +607,44 @@
                     <span>·</span>
                     <span id="updateTime"></span>
                 </div>
+                
+                
+                <div class="chart-container" style="background: rgba(255, 255, 255, 0.02); border-radius: 20px; padding: 20px; margin-bottom: 24px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="color: #fbbf24; font-size: 0.9rem; font-weight: 600;">🕒 今日估算分时走势</span>
+                        <span id="rtValueTag" style="color: #fbbf24; font-family: 'Courier New', monospace; font-weight: bold;">--</span>
+                    </div>
+                    <div id="realtimeChart" style="width: 100%; height: 220px;"></div>
+</div>
 
-                <div class="metrics-grid">
-                    <div class="metric-box">
-                        <div class="metric-label">官方估值涨幅</div>
-                        <div class="metric-value" id="officialGrowth"></div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">重仓推算涨幅</div>
-                        <div class="metric-value" id="theoryGrowth"></div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">Alpha 偏差值</div>
-                        <div class="metric-value" id="deviation"></div>
-                    </div>
+            <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">
+                <div class="metric-box hero-box">
+                    <div class="metric-label">昨日实际净值</div>
+                    <div class="metric-value" id="lastActualValue" style="color: #fff; opacity: 0.9;">--</div>
                 </div>
+                <div class="metric-box hero-box highlight">
+                    <div class="metric-label">今日实时估值</div>
+                    <div class="metric-value" id="estimatedValue" style="color: #fbbf24;">--</div>
+                    <div id="rtValueTag" style="font-size: 0.9rem; color: rgba(255,255,255,0.4); margin-top: 10px;">计算中...</div>
+                </div>
+            </div>
+
+            <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 24px;">
+                <div class="metric-box small-box">
+                    <div class="metric-label">官方估值涨幅</div>
+                    <div class="metric-value" id="officialGrowth" style="font-size: 2.2rem;">--</div>
+                </div>
+                <div class="metric-box small-box">
+                    <div class="metric-label">重仓推算涨幅</div>
+                    <div class="metric-value" id="theoryGrowth" style="font-size: 2.2rem;">--</div>
+                </div>
+                <div class="metric-box small-box">
+                    <div class="metric-label">Alpha 偏差值</div>
+                    <div class="metric-value" id="deviation" style="font-size: 2.2rem;">--</div>
+                </div>
+            </div>
+
+
                 <div class="chart-container" style="background: rgba(255, 255, 255, 0.02); border-radius: 20px; padding: 24px; margin-top: 24px; border: 1px solid rgba(255, 255, 255, 0.05);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <span style="color: rgba(255,255,255,0.7); font-size: 0.9rem; font-weight: 600;">📈 历史走势回顾</span>
@@ -633,6 +678,10 @@
     </div>
 
     <script>
+        // 1. 在 script 开头定义全局变量
+        let rtChart = null;
+        let rtData = []; // 存储分时数据点 {time, value}
+        
         let myChart = null; // 用于存储 ECharts 实例
 
         // 快速搜索
@@ -678,53 +727,74 @@
             }
         }
 
-        // 显示结果
+        // 显示结果：完整保留你的逻辑并增强稳健性
+        // 核心修复：确保所有逻辑都在同一个函数作用域内
         function displayResults(data) {
-            // 基金信息
-            document.getElementById('fundName').textContent = `${data.fund_name} (${data.fund_code})`;
-            document.getElementById('updateTime').textContent = data.update_time;
-            
-            // 涨跌数据
-            const official = data.official_growth;
-            const theory = data.theory_growth;
-            const deviation = data.deviation;
-            
-            setMetric('officialGrowth', official);
-            setMetric('theoryGrowth', theory);
-            setMetric('deviation', deviation);
-           
-            // 【新增】如果返回了历史数据，则绘制图表
-            if (data.history && data.history.length > 0) {
-                initChart(data.history);}
+            try {
+                // 1. 获取基础数据 (优先从后端传回的字段取值)
+                const lastValue = parseFloat(data.last_actual_value) || 0;
+                const growthRate = parseFloat(data.official_growth) || 0;
+                
+                // 2. 计算实时估值
+                const estValue = lastValue * (1 + growthRate / 100);
 
-            // 持仓表格
-            const tbody = document.getElementById('holdingsTable');
-            tbody.innerHTML = '';
+                // 3. 更新文本内容 (解决显示为 0 的问题)
+                document.getElementById('lastActualValue').textContent = lastValue.toFixed(4);
+                document.getElementById('estimatedValue').textContent = estValue.toFixed(4);
+                
+                // 统一更新所有估值标签
+                const rtTags = document.querySelectorAll('[id="rtValueTag"]');
+                rtTags.forEach(tag => {
+                    tag.textContent = `当前估算: ${estValue.toFixed(4)} (基于 ${data.update_time})`;
+                });
 
-            if (!data.holdings || data.holdings.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:rgba(255,255,255,0.3);padding:40px;">暂无重仓股披露数据</td></tr>';
-                return;
-            }
+                document.getElementById('fundName').textContent = `${data.fund_name} (${data.fund_code})`;
+                document.getElementById('updateTime').textContent = data.update_time;
+                
+                // 4. 更新涨跌指标颜色 (官方、理论、偏差)
+                setMetric('officialGrowth', data.official_growth);
+                setMetric('theoryGrowth', data.theory_growth);
+                setMetric('deviation', data.deviation);
+                
+                // 5. 渲染图表 (必须在函数内部调用)
+                if (data.history && data.history.length > 0) {
+                    initChart(data.history);
+                }
+                
+                // 确保 updateRealtimeChart 在这里调用，而不是在外面
+                if (typeof updateRealtimeChart === 'function') {
+                    updateRealtimeChart(estValue, data.update_time); 
+                }
 
-            data.holdings.forEach((h, idx) => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td><span class="rank-badge">${idx + 1}</span></td>
-                        <td><span class="stock-code">${h.code}</span></td>
-                        <td><span class="stock-name">${h.name}</span></td>
-                        <td><span class="stock-ratio">${h.ratio}%</span></td>
-                    </tr>
-                `;
-            });
-            
-            document.getElementById('result').classList.remove('d-none');
-            if (myChart) {
+                // 6. 渲染持仓表格 (使用 map 提高性能)
+                const tbody = document.getElementById('holdingsTable');
+                if (data.holdings && data.holdings.length > 0) {
+                    tbody.innerHTML = data.holdings.map((h, idx) => `
+                        <tr>
+                            <td><span class="rank-badge">${idx + 1}</span></td>
+                            <td><span class="stock-code">${h.code}</span></td>
+                            <td><span class="stock-name">${h.name}</span></td>
+                            <td><span class="stock-ratio">${h.ratio}%</span></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:40px;">暂无持仓数据</td></tr>';
+                }
+                
+                // 7. 最后显示结果区域
+                document.getElementById('result').classList.remove('d-none');
+                
+                // 延迟 resize 解决 ECharts 容器宽度问题
                 setTimeout(() => {
-                    myChart.resize();
+                    if (myChart) myChart.resize();
+                    if (rtChart) rtChart.resize();
                 }, 300);
+
+            } catch (e) {
+                console.error("渲染出错:", e);
+                showError("数据渲染失败，请检查控制台信息");
             }
         }
-
         // 设置指标值和颜色
         function setMetric(id, value) {
             const el = document.getElementById(id);
@@ -741,6 +811,56 @@
             el.textContent = sign + value + '%';
             el.className = `metric-value ${className}`;
         }
+
+        // 3. 新增实时图渲染函数
+        function updateRealtimeChart(val, fullTime) {
+            const timeStr = fullTime.split(' ')[1]; // 只取 "14:30" 部分
+            
+            // 如果是新基金，清空旧的分时数据
+            if (rtData.length > 0 && document.getElementById('fundCode').value.indexOf(rtData[0].code) === -1) {
+                rtData = [];
+            }
+
+            // 防止重复添加同一个时间点的数据
+            if (rtData.length === 0 || rtData[rtData.length - 1].time !== timeStr) {
+                rtData.push({ time: timeStr, value: val, code: document.getElementById('fundCode').value });
+            }
+
+            const chartDom = document.getElementById('realtimeChart');
+            if (!rtChart) rtChart = echarts.init(chartDom, 'dark');
+
+            rtChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'axis' },
+                xAxis: { 
+                    type: 'category', 
+                    data: rtData.map(d => d.time),
+                    axisLabel: { color: 'rgba(255,255,255,0.4)' }
+                },
+                yAxis: { 
+                    type: 'value', 
+                    scale: true,
+                    axisLabel: { color: 'rgba(255,255,255,0.4)' },
+                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }
+                },
+                series: [{
+                    data: rtData.map(d => d.value),
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: true,
+                    symbolSize: 8,
+                    lineStyle: { color: '#fbbf24', width: 3 },
+                    itemStyle: { color: '#fbbf24' },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(251, 191, 36, 0.3)' },
+                            { offset: 1, color: 'rgba(251, 191, 36, 0)' }
+                        ])
+                    }
+                }]
+            });
+        }
+
 
         // 显示错误
         function showError(message) {
