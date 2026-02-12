@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fund Alpha · 基金实时估值分析</title>
+    <link rel="icon" href="data:,">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f0f23;
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* 动态背景渐变 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+            animation: gradientShift 15s ease infinite;
+            z-index: 0;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(5%, -5%) rotate(120deg); }
+            66% { transform: translate(-5%, 5%) rotate(240deg); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 顶部品牌区 */
+        .brand {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 0.8s ease;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .brand h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #a78bfa 50%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+            letter-spacing: -2px;
+        }
+
+        .brand .tagline {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 400;
+        }
+
+        /* 搜索卡片 - Glassmorphism */
+        .search-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 
+                0 8px 32px 0 rgba(0, 0, 0, 0.37),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+            animation: fadeInUp 0.8s ease 0.2s both;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .fund-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px 28px;
+            color: #ffffff;
+            font-size: 1.2rem;
+            font-weight: 500;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fund-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(139, 92, 246, 0.6);
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+        }
+
+        .fund-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .query-btn {
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            border: none;
+            border-radius: 16px;
+            padding: 20px 48px;
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+            white-space: nowrap;
+        }
+
+        .query-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(139, 92, 246, 0.4);
+        }
+
+        .query-btn:active {
+            transform: translateY(0);
+        }
+
+        .quick-select {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .quick-label {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .quick-chip {
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            padding: 10px 20px;
+            color: #a78bfa;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Courier New', monospace;
+        }
+
+        .quick-chip:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: #8b5cf6;
+            transform: translateY(-2px);
+        }
+
+        /* 加载动画 */
+        .loading-state {
+            text-align: center;
+            padding: 80px 20px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 24px;
+            border: 3px solid rgba(139, 92, 246, 0.1);
+            border-top-color: #8b5cf6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 1.1rem;
+        }
+
+        /* 错误提示 */
+        .error-alert {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            color: #fca5a5;
+            margin-bottom: 24px;
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        /* 主数据展示区 - 超大突出涨跌 */
+        .hero-stats {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 28px;
+            padding: 50px;
+            margin-bottom: 32px;
+            box-shadow: 
+                0 8px 32px 0 rgba(0, 0, 0, 0.37),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+            animation: fadeInUp 0.8s ease 0.3s both;
+        }
+
+        .fund-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #d8b4fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+        }
+
+        .update-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.95rem;
+            margin-bottom: 48px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.2);
+            }
+        }
+
+        /* 核心数据网格 - 突出涨跌 */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .metric-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 32px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(236, 72, 153, 0.05));
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .metric-box:hover::before {
+            opacity: 1;
+        }
+
+        .metric-box:hover {
+            transform: translateY(-8px);
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 20px 60px rgba(139, 92, 246, 0.2);
+        }
+
+        .metric-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .metric-value {
+            font-size: 3.5rem;
+            font-weight: 800;
+            font-family: 'Courier New', monospace;
+            letter-spacing: -2px;
+            line-height: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        .metric-value.up {
+            color: #ef4444;
+            text-shadow: 
+                0 0 20px rgba(16, 185, 129, 0.3),
+                0 0 40px rgba(16, 185, 129, 0.2);
+        }
+
+        .metric-value.down {
+            color: #10b981;
+            text-shadow: 
+                0 0 20px rgba(239, 68, 68, 0.3),
+                0 0 40px rgba(239, 68, 68, 0.2);
+        }
+
+        /* 持仓明细表格 */
+        .holdings-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 28px;
+            padding: 40px;
+            box-shadow: 
+                0 8px 32px 0 rgba(0, 0, 0, 0.37),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+            animation: fadeInUp 0.8s ease 0.4s both;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .section-icon {
+            font-size: 1.8rem;
+        }
+
+        .section-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #c4b5fd 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .holdings-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+
+        .holdings-table thead tr {
+            background: rgba(139, 92, 246, 0.08);
+        }
+
+        .holdings-table th {
+            padding: 16px 20px;
+            text-align: left;
+            color: rgba(167, 139, 250, 0.9);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .holdings-table th:first-child {
+            border-radius: 12px 0 0 12px;
+        }
+
+        .holdings-table th:last-child {
+            border-radius: 0 12px 12px 0;
+        }
+
+        .holdings-table tbody tr {
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.3s;
+        }
+
+        .holdings-table tbody tr:hover {
+            background: rgba(139, 92, 246, 0.08);
+            transform: translateX(8px);
+        }
+
+        .holdings-table td {
+            padding: 18px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .holdings-table td:first-child {
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px 0 0 12px;
+        }
+
+        .holdings-table td:last-child {
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 0 12px 12px 0;
+        }
+
+        .rank-badge {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 50%;
+            text-align: center;
+            line-height: 32px;
+            font-weight: 700;
+            color: #a78bfa;
+        }
+
+        .stock-code {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #8b5cf6;
+            font-size: 0.95rem;
+        }
+
+        .stock-name {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+        }
+
+        .stock-ratio {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* 隐藏类 */
+        .d-none {
+            display: none !important;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 968px) {
+            .brand h1 {
+                font-size: 2.5rem;
+            }
+
+            .search-card {
+                padding: 28px;
+            }
+
+            .input-wrapper {
+                flex-direction: column;
+            }
+
+            .query-btn {
+                width: 100%;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metric-value {
+                font-size: 2.8rem;
+            }
+
+            .holdings-table {
+                font-size: 0.85rem;
+            }
+
+            .holdings-table th,
+            .holdings-table td {
+                padding: 12px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 品牌标题 -->
+        <div class="brand">
+            <h1>基金毛估估</h1>
+            <div class="tagline">滚动更新基金估值 · 自动识别调仓偏差</div>
+        </div>
+
+        <!-- 搜索区域 -->
+        <div class="search-card">
+            <div class="input-wrapper">
+                <input 
+                    type="text" 
+                    id="fundCode" 
+                    class="fund-input" 
+                    placeholder="输入基金代码 (e.g. 110011)"
+                    value="110011"
+                    autocomplete="off"
+                >
+                <button class="query-btn" onclick="queryFund()">
+                    🔍 实时查询
+                </button>
+            </div>
+            
+            <div class="quick-select">
+                <span class="quick-label">快速选择：</span>
+                <div class="quick-chip" onclick="quickSearch('110011')">110011</div>
+                <div class="quick-chip" onclick="quickSearch('005827')">005827</div>
+                <div class="quick-chip" onclick="quickSearch('161725')">161725</div>
+                <div class="quick-chip" onclick="quickSearch('001120')">001120</div>
+            </div>
+        </div>
+
+        <!-- 加载状态 -->
+        <div id="loading" class="loading-state d-none">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">正在获取实时数据...</div>
+        </div>
+
+        <!-- 错误提示 -->
+        <div id="error" class="error-alert d-none"></div>
+
+        <!-- 结果展示 -->
+        <div id="result" class="d-none">
+            <!-- 主数据区 -->
+            <div class="hero-stats">
+                <div class="fund-title" id="fundName"></div>
+                <div class="update-info">
+                    <div class="pulse-dot"></div>
+                    <span>实时更新</span>
+                    <span>·</span>
+                    <span id="updateTime"></span>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <div class="metric-label">官方估值涨幅</div>
+                        <div class="metric-value" id="officialGrowth"></div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">重仓推算涨幅</div>
+                        <div class="metric-value" id="theoryGrowth"></div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">Alpha 偏差值</div>
+                        <div class="metric-value" id="deviation"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 持仓明细 -->
+            <div class="holdings-card">
+                <div class="section-header">
+                    <span class="section-icon">💼</span>
+                    <h2 class="section-title">前十大重仓股</h2>
+                </div>
+
+                <table class="holdings-table">
+                    <thead>
+                        <tr>
+                            <th>排名</th>
+                            <th>股票代码</th>
+                            <th>股票名称</th>
+                            <th>持仓占比</th>
+                        </tr>
+                    </thead>
+                    <tbody id="holdingsTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 快速搜索
+        function quickSearch(code) {
+            document.getElementById('fundCode').value = code;
+            queryFund();
+        }
+
+        // 主查询函数
+        async function queryFund() {
+            const fundCode = document.getElementById('fundCode').value.trim();
+            
+            if (!fundCode) {
+                showError('请输入基金代码');
+                return;
+            }
+            
+            // 显示加载
+            document.getElementById('loading').classList.remove('d-none');
+            document.getElementById('result').classList.add('d-none');
+            document.getElementById('error').classList.add('d-none');
+            
+            try {
+                const response = await fetch('/api/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fund_code: fundCode })
+                });
+                
+                const data = await response.json();
+                document.getElementById('loading').classList.add('d-none');
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                displayResults(data);
+                
+            } catch (error) {
+                document.getElementById('loading').classList.add('d-none');
+                showError('查询失败: ' + error.message);
+            }
+        }
+
+        // 显示结果
+        function displayResults(data) {
+            // 基金信息
+            document.getElementById('fundName').textContent = `${data.fund_name} (${data.fund_code})`;
+            document.getElementById('updateTime').textContent = data.update_time;
+            
+            // 涨跌数据
+            const official = data.official_growth;
+            const theory = data.theory_growth;
+            const deviation = data.deviation;
+            
+            setMetric('officialGrowth', official);
+            setMetric('theoryGrowth', theory);
+            setMetric('deviation', deviation);
+            
+            // 持仓表格
+            const tbody = document.getElementById('holdingsTable');
+            tbody.innerHTML = '';
+            data.holdings.forEach((h, idx) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><span class="rank-badge">${idx + 1}</span></td>
+                        <td><span class="stock-code">${h.code}</span></td>
+                        <td><span class="stock-name">${h.name}</span></td>
+                        <td><span class="stock-ratio">${h.ratio}%</span></td>
+                    </tr>
+                `;
+            });
+            
+            document.getElementById('result').classList.remove('d-none');
+        }
+
+        // 设置指标值和颜色
+        function setMetric(id, value) {
+            const el = document.getElementById(id);
+            const sign = value >= 0 ? '+' : '';
+            const className = value >= 0 ? 'up' : 'down';
+            
+            el.textContent = sign + value + '%';
+            el.className = `metric-value ${className}`;
+        }
+
+        // 显示错误
+        function showError(message) {
+            const errorEl = document.getElementById('error');
+            errorEl.textContent = '❌ ' + message;
+            errorEl.classList.remove('d-none');
+        }
+
+        // 回车查询
+        document.getElementById('fundCode').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') queryFund();
+        });
+
+        // 控制台欢迎信息
+        console.log(
+            '%c🚀 FUND ALPHA SYSTEM READY', 
+            'background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px;'
+        );
+    </script>
+</body>
+</html>
